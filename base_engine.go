@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log"
 	"sync"
 	"time"
 )
@@ -15,7 +16,7 @@ import (
 
 
 // SharedLog represents the shared log API used by BaseEngine.
-type SharedLog = VirtualLog
+type SharedLog = SimpleVirtualLog
 
 // BaseEngine implements the IEngine interface.
 type BaseEngine struct {
@@ -23,7 +24,7 @@ type BaseEngine struct {
 	localStore  LocalStore
 	cursor      LogPos // for local store
 	mu          sync.Mutex
-	applyThread chan Entry
+	applyThread chan []Entry
 	syncQueue   []chan ROTx
 	trimPrefix  LogPos
 	stopGC      chan struct{}
@@ -31,16 +32,23 @@ type BaseEngine struct {
 }
 
 // NewBaseEngine creates a new BaseEngine instance.
-func NewBaseEngine(sharedLog SharedLog, localStore LocalStore) *BaseEngine {
+func NewBaseEngine(sharedLog SharedLog, localStore LocalStore, applyC <-chan []Entry) *BaseEngine {
 	be := &BaseEngine{
 		sharedLog:   sharedLog,
 		localStore:  localStore,
 		cursor:      0,
-		applyThread: make(chan Entry, 100), // Buffered channel for the apply thread.
+		applyThread: make(chan []Entry, 100), // Buffered channel for the apply thread.
 		trimPrefix:  0,
 		stopGC:      make(chan struct{}),
 	}
-	be.startApplyThread()
+
+	go func() {
+		log.Println("starting apply watcher")
+		for thing := range applyC {
+			be.applyThread <- thing
+		}
+	}()
+	//be.startApplyThread()
 	be.startGCThread()
 	return be
 }
@@ -92,17 +100,17 @@ func (be *BaseEngine) Sync(ctx context.Context) Future[ROTx] {
 	return Future[ROTx]{Result: <-result}
 }
 
-// RegisterUpcall registers the applicator for the apply calls.
-func (be *BaseEngine) RegisterUpcall(app IApplicator[any, Entry]) {
-	go func() {
-		for entry := range be.applyThread {
-			// Create a transaction for the apply process.
-			txn := be.localStore.NewTransaction()
-			app.Apply(txn, entry, be.cursor)
-			txn.Commit()
-		}
-	}()
-}
+//// RegisterUpcall registers the applicator for the apply calls.
+//func (be *BaseEngine) RegisterUpcall(app IApplicator[any, Entry]) {
+//	go func() {
+//		for entry := range be.applyThread {
+//			// Create a transaction for the apply process.
+//			txn := be.localStore.NewTransaction()
+//			app.Apply(txn, entry, be.cursor)
+//			txn.Commit()
+//		}
+//	}()
+//}
 
 // SetTrimPrefix sets the trim prefix for garbage collection.
 func (be *BaseEngine) SetTrimPrefix(pos LogPos) {
@@ -116,24 +124,23 @@ func (be *BaseEngine) playLog(target LogPos) {
 	be.mu.Lock()
 	defer be.mu.Unlock()
 
-	entries := be.sharedLog.Read(be.cursor, target)
-	for _, entry := range entries {
-		be.cursor++
-		be.applyThread <- entry
+	for ; be.cursor < target; be.cursor++ {
+		entry := be.sharedLog.ReadNext(be.cursor, target)
+		be.applyThread <- []Entry{entry}
 	}
 }
 
-// startApplyThread spawns the apply thread.
-func (be *BaseEngine) startApplyThread() {
-	be.wg.Add(1)
-	go func() {
-		defer be.wg.Done()
-		for entry := range be.applyThread {
-			// The actual application logic will happen here.
-			_ = entry // Process entry as needed.
-		}
-	}()
-}
+//// startApplyThread spawns the apply thread.
+//func (be *BaseEngine) startApplyThread() {
+//	be.wg.Add(1)
+//	go func() {
+//		defer be.wg.Done()
+//		for entry := range be.applyThread {
+//			// The actual application logic will happen here.
+//			_ = entry // Process entry as needed.
+//		}
+//	}()
+//}
 
 // startGCThread spawns a background garbage collection thread.
 func (be *BaseEngine) startGCThread() {
@@ -149,7 +156,7 @@ func (be *BaseEngine) startGCThread() {
 				be.mu.Lock()
 				prefix := be.trimPrefix
 				be.mu.Unlock()
-				be.sharedLog.Trim(prefix)
+				be.sharedLog.PrefixTrim(prefix)
 			case <-be.stopGC:
 				return
 			}
@@ -160,7 +167,7 @@ func (be *BaseEngine) startGCThread() {
 // Stop stops the background threads.
 func (be *BaseEngine) Stop() {
 	close(be.stopGC)
-	be.wg.Wait()
 	close(be.applyThread)
+	be.wg.Wait()
 }
 
