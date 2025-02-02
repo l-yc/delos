@@ -18,12 +18,10 @@ func main() {
 
 
 
-	applyC := make(chan []Entry)
-	defer close(applyC)
-	sharedLog := NewSimpleVirtualLog(applyC)
+	sharedLog := NewSimpleVirtualLog()
 	//localStore := NewFakeLocalStore()
 	var localStore LocalStore = NewFakeLocalStore()
-	be := NewBaseEngine(&sharedLog, &localStore, applyC)
+	be := NewBaseEngine(&sharedLog, &localStore)
 	log.Println("created base engine", be)
 
 

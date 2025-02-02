@@ -16,7 +16,6 @@ type BaseEngine struct {
 	localStore  *LocalStore
 	cursor      LogPos // for local store
 	mu          sync.Mutex
-	applyThread chan Entry
 	syncQueue   []chan ROTx
 	trimPrefix  LogPos
 	stopGC      chan struct{}
@@ -26,25 +25,15 @@ type BaseEngine struct {
 }
 
 // NewBaseEngine creates a new BaseEngine instance.
-func NewBaseEngine(sharedLog *SharedLog, localStore *LocalStore, applyC <-chan []Entry) *BaseEngine {
+func NewBaseEngine(sharedLog *SharedLog, localStore *LocalStore) *BaseEngine {
 	be := &BaseEngine{
 		sharedLog:   sharedLog,
 		localStore:  localStore,
-		cursor:      0,
-		applyThread: make(chan Entry, 100), // Buffered channel for the apply thread.
+		cursor:      1,
 		trimPrefix:  0,
 		stopGC:      make(chan struct{}),
 	}
 
-	go func() {
-		log.Println("starting apply watcher")
-		for thing := range applyC {
-			for _, entry := range thing {
-				be.applyThread <- entry
-			}
-		}
-	}()
-	be.startApplyThread()
 	be.startGCThread()
 	return be
 }
@@ -74,45 +63,40 @@ func (be *BaseEngine) Propose(ctx context.Context, e Entry) Future[string] {
 func (be *BaseEngine) Sync(ctx context.Context) Future[ROTx] {
 	result := make(chan ROTx, 1)
 
-	be.mu.Lock()
-	be.syncQueue = append(be.syncQueue, result)
-	be.mu.Unlock()
+	//be.mu.Lock()
+	//be.syncQueue = append(be.syncQueue, result)
+	//be.mu.Unlock()
 
 	go func() {
+		log.Println("starting sync")
 		// Fetch the shared log tail.
 		tail := be.sharedLog.CheckTail()
+		log.Println("tail is", tail)
 
 		// Play the log forward to the tail position.
 		be.playLog(tail)
+		log.Println("played log")
 
 		// Process queued sync calls once the tail is reached.
 		be.mu.Lock()
-		for _, ch := range be.syncQueue {
-			roTx := (*be.localStore).NewReadOnlyTransaction()
-			ch <- roTx
-		}
-		be.syncQueue = nil
+		//for _, ch := range be.syncQueue {
+		//	roTx := (*be.localStore).NewReadOnlyTransaction()
+		//	ch <- roTx
+		//}
+		//be.syncQueue = nil
+		roTx := (*be.localStore).NewReadOnlyTransaction()
+		result <- roTx
+
+		log.Println("sync ok")
 		be.mu.Unlock()
 	}()
 
 	return Future[ROTx]{Result: <-result}
 }
 
-//// RegisterUpcall registers the applicator for the apply calls.
-//func (be *BaseEngine) RegisterUpcall(app IApplicator[any, Entry]) {
-//	go func() {
-//		for entry := range be.applyThread {
-//			// Create a transaction for the apply process.
-//			txn := be.localStore.NewTransaction()
-//			app.Apply(txn, entry, be.cursor)
-//			txn.Commit()
-//		}
-//	}()
-//}
 func (be *BaseEngine) RegisterUpcall(app *IApplicator[string, Entry]) {
 	be.app = app
 }
-
 
 // SetTrimPrefix sets the trim prefix for garbage collection.
 func (be *BaseEngine) SetTrimPrefix(pos LogPos) {
@@ -126,31 +110,15 @@ func (be *BaseEngine) playLog(target LogPos) {
 	be.mu.Lock()
 	defer be.mu.Unlock()
 
-	for ; be.cursor < target; be.cursor++ {
-		entry := be.sharedLog.ReadNext(be.cursor, target)
-		be.applyThread <- entry
-	}
-}
+	log.Println("playing log from", be.cursor, "to", target)
+	for ; be.cursor <= target; be.cursor++ {
+		entry := be.sharedLog.ReadNext(be.cursor, target + 1)
 
-// startApplyThread spawns the apply thread.
-func (be *BaseEngine) startApplyThread() {
-	be.wg.Add(1)
-//	go func() {
-//		defer be.wg.Done()
-//		for entry := range be.applyThread {
-//			// The actual application logic will happen here.
-//			_ = entry // Process entry as needed.
-//		}
-//	}()
-	go func() {
-		defer be.wg.Done()
-		for entry := range be.applyThread {
-			// Create a transaction for the apply process.
-			txn := (*be.localStore).NewTransaction()
-			(*be.app).Apply(txn, entry, be.cursor)
-			txn.Commit()
-		}
-	}()
+		// apply
+		txn := (*be.localStore).NewTransaction()
+		(*be.app).Apply(txn, entry, be.cursor)
+		txn.Commit()
+	}
 }
 
 // startGCThread spawns a background garbage collection thread.
@@ -178,7 +146,6 @@ func (be *BaseEngine) startGCThread() {
 // Stop stops the background threads.
 func (be *BaseEngine) Stop() {
 	close(be.stopGC)
-	close(be.applyThread)
 	be.wg.Wait()
 }
 

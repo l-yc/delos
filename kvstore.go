@@ -30,7 +30,11 @@ func NewKVStore(engine *IEngine[string, Entry]) KVStore {
 	return kvs
 }
 
+// wrapper
 func (s *KVStore) Get(key string) (string, bool) {
+	_ = (*s.engine).Sync(context.TODO()).Result
+	log.Println("finished syncing")
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -48,6 +52,8 @@ func (s *KVStore) ProposeSet(key string, val string) {
 	(*s.engine).Propose(context.TODO(), Entry{ Data: KV{key, val} })
 }
 
+
+// applicator
 func (s *KVStore) Set(k string, v string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -56,11 +62,14 @@ func (s *KVStore) Set(k string, v string) {
 }
 
 
-// wrapper?
 func (s KVStore) Apply(txn RWTx, e Entry, pos LogPos) string {
-	log.Println("apply kv", e)
 	entry := e
-	data := entry.Data.(KV)
+	data, ok := entry.Data.(KV)
+	if ok {
+		log.Println("successfully applied", data)
+	} else {
+		log.Println("cannot apply", entry)
+	}
 	s.Set(data.Key, data.Val)
 	return "ok"
 }

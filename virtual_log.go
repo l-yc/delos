@@ -67,11 +67,10 @@ type SimpleLoglet struct {
 	node        raft.Node
 	raftStorage *raft.MemoryStorage
 	sealed      bool
-	applyC	    chan<- []Entry
 }
 
 
-func NewSimpleLoglet(applyC chan<- []Entry) SimpleLoglet {
+func NewSimpleLoglet() SimpleLoglet {
 	raftStorage := raft.NewMemoryStorage()
 	c := &raft.Config{
 		ID:              0x01,
@@ -95,7 +94,6 @@ func NewSimpleLoglet(applyC chan<- []Entry) SimpleLoglet {
 		node,
 		raftStorage,
 		false,
-		applyC,
 	}
 	log.Println("created loglet")
 	go s.run()
@@ -148,8 +146,7 @@ func (s SimpleLoglet) run() {
 				}
 			}
 			if len(data) > 0 {
-				//log.Println("sending data", data)
-				s.applyC <- data
+				log.Println("ready to apply data", data)
 			}
 			s.node.Advance()
 			//log.Println("done")
@@ -166,10 +163,10 @@ func (s SimpleLoglet) Append(entry Entry) LogPos {
 	if err := enc.Encode(entry); err != nil {
 		log.Fatal("encode error:", err)
 	}
-	//b := data.Bytes()
+	b := data.Bytes()
 	//log.Println("SimpleLoglet: propose", entry, b)
-	//s.node.Propose(context.TODO(), b)
-	s.node.Propose(context.TODO(), data.Bytes())
+	s.node.Propose(context.TODO(), b)
+	//s.node.Propose(context.TODO(), data.Bytes())
 
 	return -1 // TODO doesn't return a logpos, so have to figure out how to get that
 }
@@ -189,10 +186,13 @@ func (s SimpleLoglet) ReadNext(lo LogPos, hi LogPos) Entry {
 		return Entry{}
 	}
 
+	log.Println("read entry", lo)
 	var entry Entry
 	dec := gob.NewDecoder(bytes.NewReader(entries[0].Data))
 	if err := dec.Decode(&entry); err != nil {
-		log.Fatal("encode error:", err)
+		//log.Fatal("encode error:", err)
+		log.Println("encode error:", err)
+		return Entry{}
 	}
 	return entry
 }
@@ -213,8 +213,8 @@ type SimpleVirtualLog struct {
 }
 
 
-func NewSimpleVirtualLog(applyC chan<- []Entry) SimpleVirtualLog {
-	loglet := NewSimpleLoglet(applyC)
+func NewSimpleVirtualLog() SimpleVirtualLog {
+	loglet := NewSimpleLoglet()
 	return SimpleVirtualLog{
 		loglet,
 	}
