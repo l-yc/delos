@@ -148,11 +148,11 @@ func (s SimpleLoglet) run() {
 				}
 			}
 			if len(data) > 0 {
-				log.Println("sending data", data)
+				//log.Println("sending data", data)
 				s.applyC <- data
 			}
 			s.node.Advance()
-			log.Println("done")
+			//log.Println("done")
 	//	case <-s.done:
 	//		return
 		}

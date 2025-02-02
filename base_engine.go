@@ -7,37 +7,31 @@ import (
 	"time"
 )
 
-// type IEngine[ReturnType any, EntryType any] interface {
-// 	Propose(ctx context.Context, e EntryType) Future[ReturnType]
-// 	Sync(ctx context.Context) Future[ROTx]
-// 	RegisterUpcall(app IApplicator[ReturnType, EntryType])
-// 	SetTrimPrefix(pos LogPos)
-// }
-
-
 // SharedLog represents the shared log API used by BaseEngine.
 type SharedLog = SimpleVirtualLog
 
 // BaseEngine implements the IEngine interface.
 type BaseEngine struct {
-	sharedLog   SharedLog
-	localStore  LocalStore
+	sharedLog   *SharedLog
+	localStore  *LocalStore
 	cursor      LogPos // for local store
 	mu          sync.Mutex
-	applyThread chan []Entry
+	applyThread chan Entry
 	syncQueue   []chan ROTx
 	trimPrefix  LogPos
 	stopGC      chan struct{}
 	wg          sync.WaitGroup
+
+	app			*IApplicator[string, Entry]
 }
 
 // NewBaseEngine creates a new BaseEngine instance.
-func NewBaseEngine(sharedLog SharedLog, localStore LocalStore, applyC <-chan []Entry) *BaseEngine {
+func NewBaseEngine(sharedLog *SharedLog, localStore *LocalStore, applyC <-chan []Entry) *BaseEngine {
 	be := &BaseEngine{
 		sharedLog:   sharedLog,
 		localStore:  localStore,
 		cursor:      0,
-		applyThread: make(chan []Entry, 100), // Buffered channel for the apply thread.
+		applyThread: make(chan Entry, 100), // Buffered channel for the apply thread.
 		trimPrefix:  0,
 		stopGC:      make(chan struct{}),
 	}
@@ -45,17 +39,20 @@ func NewBaseEngine(sharedLog SharedLog, localStore LocalStore, applyC <-chan []E
 	go func() {
 		log.Println("starting apply watcher")
 		for thing := range applyC {
-			be.applyThread <- thing
+			for _, entry := range thing {
+				be.applyThread <- entry
+			}
 		}
 	}()
-	//be.startApplyThread()
+	be.startApplyThread()
 	be.startGCThread()
 	return be
 }
 
 // Propose appends an entry to the shared log and ensures it is applied.
-func (be *BaseEngine) Propose(ctx context.Context, e Entry) Future[ROTx] {
-	result := make(chan ROTx, 1)
+func (be *BaseEngine) Propose(ctx context.Context, e Entry) Future[string] {
+	//result := make(chan ROTx, 1)
+	result := make(chan string, 1)
 
 	go func() {
 		// Append the entry to the shared log.
@@ -65,11 +62,12 @@ func (be *BaseEngine) Propose(ctx context.Context, e Entry) Future[ROTx] {
 		be.playLog(pos)
 
 		// Create a read-only transaction reflecting the committed state.
-		roTx := be.localStore.NewReadOnlyTransaction()
-		result <- roTx
+		//roTx := (*be.localStore).NewReadOnlyTransaction()
+		//result <- roTx
+		result <- "ok"
 	}()
 
-	return Future[ROTx]{Result: <-result}
+	return Future[string]{Result: <-result}
 }
 
 // Sync synchronizes the state with the shared log tail.
@@ -90,7 +88,7 @@ func (be *BaseEngine) Sync(ctx context.Context) Future[ROTx] {
 		// Process queued sync calls once the tail is reached.
 		be.mu.Lock()
 		for _, ch := range be.syncQueue {
-			roTx := be.localStore.NewReadOnlyTransaction()
+			roTx := (*be.localStore).NewReadOnlyTransaction()
 			ch <- roTx
 		}
 		be.syncQueue = nil
@@ -111,6 +109,10 @@ func (be *BaseEngine) Sync(ctx context.Context) Future[ROTx] {
 //		}
 //	}()
 //}
+func (be *BaseEngine) RegisterUpcall(app *IApplicator[string, Entry]) {
+	be.app = app
+}
+
 
 // SetTrimPrefix sets the trim prefix for garbage collection.
 func (be *BaseEngine) SetTrimPrefix(pos LogPos) {
@@ -126,13 +128,13 @@ func (be *BaseEngine) playLog(target LogPos) {
 
 	for ; be.cursor < target; be.cursor++ {
 		entry := be.sharedLog.ReadNext(be.cursor, target)
-		be.applyThread <- []Entry{entry}
+		be.applyThread <- entry
 	}
 }
 
-//// startApplyThread spawns the apply thread.
-//func (be *BaseEngine) startApplyThread() {
-//	be.wg.Add(1)
+// startApplyThread spawns the apply thread.
+func (be *BaseEngine) startApplyThread() {
+	be.wg.Add(1)
 //	go func() {
 //		defer be.wg.Done()
 //		for entry := range be.applyThread {
@@ -140,7 +142,16 @@ func (be *BaseEngine) playLog(target LogPos) {
 //			_ = entry // Process entry as needed.
 //		}
 //	}()
-//}
+	go func() {
+		defer be.wg.Done()
+		for entry := range be.applyThread {
+			// Create a transaction for the apply process.
+			txn := (*be.localStore).NewTransaction()
+			(*be.app).Apply(txn, entry, be.cursor)
+			txn.Commit()
+		}
+	}()
+}
 
 // startGCThread spawns a background garbage collection thread.
 func (be *BaseEngine) startGCThread() {

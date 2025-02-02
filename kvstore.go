@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	//"encoding/gob"
 	"log"
 	//"strings"
@@ -11,7 +12,7 @@ import (
 type KVStore struct {
 	mu		 sync.RWMutex
 	data     map[string]string // current committed key-value pairs
-	proposeC	 chan<- KV
+	engine	 *IEngine[string, Entry]
 }
 
 type KV struct {
@@ -19,8 +20,14 @@ type KV struct {
 	Val string
 }
 
-func NewKVStore(proposeC chan<- KV) *KVStore {
-	return &KVStore{ data: make(map[string]string), proposeC: proposeC }
+func NewKVStore(engine *IEngine[string, Entry]) KVStore {
+	kvs := KVStore{ data: make(map[string]string), engine: engine }
+	log.Println("created kv store", kvs)
+
+	var test IApplicator[string, Entry] = kvs
+	(*engine).RegisterUpcall(&test)
+	log.Println("registered upcall for engine")
+	return kvs
 }
 
 func (s *KVStore) Get(key string) (string, bool) {
@@ -38,10 +45,7 @@ func (s *KVStore) ProposeSet(key string, val string) {
 	//	log.Fatal(err)
 	//}
 
-	log.Println("going to set")
-	//s.proposeC <- buf.String()
-	s.proposeC <- KV{key, val}
-	log.Println("set")
+	(*s.engine).Propose(context.TODO(), Entry{ Data: KV{key, val} })
 }
 
 func (s *KVStore) Set(k string, v string) {
@@ -49,4 +53,18 @@ func (s *KVStore) Set(k string, v string) {
 	defer s.mu.Unlock()
 
 	s.data[k] = v
+}
+
+
+// wrapper?
+func (s KVStore) Apply(txn RWTx, e Entry, pos LogPos) string {
+	log.Println("apply kv", e)
+	entry := e
+	data := entry.Data.(KV)
+	s.Set(data.Key, data.Val)
+	return "ok"
+}
+
+func (s KVStore) PostApply(e Entry, pos LogPos) {
+
 }

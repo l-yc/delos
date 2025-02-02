@@ -17,7 +17,7 @@ import (
 type IEngine[ReturnType any, EntryType any] interface {
 	Propose(ctx context.Context, e EntryType) Future[ReturnType]
 	Sync(ctx context.Context) Future[ROTx]
-	RegisterUpcall(app IApplicator[ReturnType, EntryType])
+	RegisterUpcall(app *IApplicator[ReturnType, EntryType])
 	SetTrimPrefix(pos LogPos)
 }
 
