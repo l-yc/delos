@@ -6,6 +6,8 @@ import (
 	"log"
 	//"strings"
 	"sync"
+
+	. "github.com/l-yc/delos/lib"
 )
 
 // a key-value store backed by raft
@@ -22,7 +24,7 @@ type KV struct {
 }
 
 func NewKVStore(engine *IEngine[string, Entry]) KVStore {
-	kvs := KVStore{ data: , engine: engine }
+	kvs := KVStore{ data: make(map[string]string), engine: engine }
 	log.Println("created kv store", kvs)
 
 	var test IApplicator[string, Entry] = kvs

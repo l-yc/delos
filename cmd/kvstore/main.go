@@ -4,11 +4,36 @@ import (
 	"encoding/gob"
 	"flag"
 	"log"
+	"net/rpc"
 
 	"go.etcd.io/raft/v3/raftpb"
+
+	. "github.com/l-yc/delos/lib"
 )
 
 func main() {
+	client, err := rpc.Dial("tcp", "localhost:42586")
+
+	// Synchronous call
+	args := &Args{7,8}
+	var reply int
+	err = client.Call("Arith.Multiply", args, &reply)
+	if err != nil {
+		log.Fatal("arith error:", err)
+	}
+	log.Printf("Arith: %d*%d=%d", args.A, args.B, reply)
+
+
+
+
+
+
+
+
+
+
+
+
 	gob.Register(KV{})
 
 

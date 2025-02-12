@@ -1,4 +1,4 @@
-package main
+package lib
 
 import (
 	"go.etcd.io/raft/v3"
