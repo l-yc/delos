@@ -16,8 +16,6 @@ func main() {
 	flag.Parse()
 
 
-
-
 	sharedLog := NewSimpleVirtualLog()
 	//localStore := NewFakeLocalStore()
 	var localStore LocalStore = NewFakeLocalStore()

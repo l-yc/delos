@@ -9,6 +9,7 @@ import (
 )
 
 // a key-value store backed by raft
+// so... the local state is suppoesd to go into the local storage, but this feels weird...
 type KVStore struct {
 	mu		 sync.RWMutex
 	data     map[string]string // current committed key-value pairs
@@ -21,7 +22,7 @@ type KV struct {
 }
 
 func NewKVStore(engine *IEngine[string, Entry]) KVStore {
-	kvs := KVStore{ data: make(map[string]string), engine: engine }
+	kvs := KVStore{ data: , engine: engine }
 	log.Println("created kv store", kvs)
 
 	var test IApplicator[string, Entry] = kvs
@@ -32,8 +33,10 @@ func NewKVStore(engine *IEngine[string, Entry]) KVStore {
 
 // wrapper
 func (s *KVStore) Get(key string) (string, bool) {
-	_ = (*s.engine).Sync(context.TODO()).Result
-	log.Println("finished syncing")
+	ctx := context.Background()
+
+	tx := (*s.engine).Sync(ctx).Result
+	log.Println("finished syncing", tx)
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
