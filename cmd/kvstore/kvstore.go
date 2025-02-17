@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	//"encoding/gob"
 	"log"
 	//"strings"
@@ -35,9 +34,7 @@ func NewKVStore(engine *IEngine[string, Entry]) *KVStore {
 
 // wrapper
 func (s *KVStore) Get(key string) (string, bool) {
-	ctx := context.Background()
-
-	tx := (*s.engine).Sync(ctx).Result
+	tx := (*s.engine).Sync().Result
 	log.Println("finished syncing", tx)
 
 	s.mu.RLock()
@@ -54,7 +51,7 @@ func (s *KVStore) ProposeSet(key string, val string) {
 	//	log.Fatal(err)
 	//}
 
-	(*s.engine).Propose(context.TODO(), Entry{ Data: KV{key, val} })
+	(*s.engine).Propose(Entry{ Data: KV{key, val} })
 }
 
 

@@ -1,7 +1,6 @@
 package lib
 
 import (
-	"context"
 )
 
 // Log-structued protocol API
@@ -15,8 +14,8 @@ import (
 // }
 
 type IEngine[ReturnType any, EntryType any] interface {
-	Propose(ctx context.Context, e EntryType) Future[ReturnType]
-	Sync(ctx context.Context) Future[ROTx]
+	Propose(e EntryType) Future[ReturnType]
+	Sync() Future[ROTx]
 	RegisterUpcall(app *IApplicator[ReturnType, EntryType])
 	SetTrimPrefix(pos LogPos)
 }

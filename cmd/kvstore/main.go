@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/gob"
 	"flag"
 	"log"
@@ -20,7 +19,7 @@ type RPCEngine struct {
 	client *rpc.Client
 }
 
-func (self RPCEngine) Propose(ctx context.Context, e Entry) Future[string] {	
+func (self RPCEngine) Propose(e Entry) Future[string] {	
 	// Synchronous call
 	//args := &ProposeArgs[Entry]{ Context: ctx, E: e }
 	args := &ProposeArgs[Entry]{ E: e }
@@ -37,7 +36,7 @@ func (self RPCEngine) Propose(ctx context.Context, e Entry) Future[string] {
 }
 
 // Sync synchronizes the state with the shared log tail.
-func (self RPCEngine) Sync(ctx context.Context) Future[ROTx] {
+func (self RPCEngine) Sync() Future[ROTx] {
 
 	//args := &SyncArgs{ Context: ctx }
 	args := &SyncArgs{}
@@ -100,7 +99,6 @@ func (a *API) Apply(args *ApplyArgs[Entry], reply *ApplyReply[string]) error {
 
 
 func main() {
-	gob.Register(context.Background())
 	gob.Register(KV{})
 
 	var wg sync.WaitGroup

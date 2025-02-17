@@ -1,7 +1,6 @@
 package lib
 
 import (
-	"context"
 	"log"
 	"sync"
 	"time"
@@ -39,7 +38,7 @@ func NewBaseEngine(sharedLog *SharedLog, localStore *LocalStore) *BaseEngine {
 }
 
 // Propose appends an entry to the shared log and ensures it is applied.
-func (be *BaseEngine) Propose(ctx context.Context, e Entry) Future[string] {
+func (be *BaseEngine) Propose(e Entry) Future[string] {
 	//result := make(chan ROTx, 1)
 	result := make(chan string, 1)
 
@@ -60,7 +59,7 @@ func (be *BaseEngine) Propose(ctx context.Context, e Entry) Future[string] {
 }
 
 // Sync synchronizes the state with the shared log tail.
-func (be *BaseEngine) Sync(ctx context.Context) Future[ROTx] {
+func (be *BaseEngine) Sync() Future[ROTx] {
 	result := make(chan ROTx, 1)
 
 	//be.mu.Lock()

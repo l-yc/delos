@@ -1,7 +1,6 @@
 package lib
 
 import (
-	_ "context"
 )
 
 type Args struct {
@@ -15,7 +14,6 @@ type Quotient struct {
 
 
 type ProposeArgs[EntryType any] struct {
-	//Context context.Context
 	E EntryType
 }
 
@@ -24,7 +22,6 @@ type ProposeReply[ReturnType any] struct {
 }
 
 type SyncArgs struct {
-	//Context context.Context
 }
 
 type SyncReply struct {
@@ -38,16 +35,12 @@ type KV struct {
 }
 
 
-//Sync(ctx context.Context) Future[ROTx]
-//RegisterUpcall(app *IApplicator[ReturnType, EntryType])
-//SetTrimPrefix(pos LogPos)
 
 
 
 
 
 type ApplyArgs[EntryType any] struct {
-	//Context context.Context
 	Txn RWTx
 	E EntryType
 	Pos LogPos
