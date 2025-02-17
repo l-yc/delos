@@ -18,10 +18,10 @@ type KVStore struct {
 	engine	 *IEngine[string, Entry]
 }
 
-type KV struct {
-	Key string
-	Val string
-}
+//type KV struct {
+//	Key string
+//	Val string
+//}
 
 func NewKVStore(engine *IEngine[string, Entry]) KVStore {
 	kvs := KVStore{ data: make(map[string]string), engine: engine }
