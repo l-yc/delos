@@ -5,7 +5,9 @@ import (
 	"encoding/gob"
 	"flag"
 	"log"
+	"net"
 	"net/rpc"
+	"sync"
 
 	"go.etcd.io/raft/v3/raftpb"
 
@@ -44,7 +46,7 @@ func (self RPCEngine) Sync(ctx context.Context) Future[ROTx] {
 	var reply SyncReply
 	err := self.client.Call("API.Sync", args, &reply)
 	if err != nil {
-		log.Fatal("jPI error:", err)
+		log.Fatal("API error:", err)
 	}
 	log.Println(reply)
 	//log.Printf("Arith: %d*%d=%d", args.A, args.B, reply)
@@ -53,6 +55,17 @@ func (self RPCEngine) Sync(ctx context.Context) Future[ROTx] {
 }
 
 func (self RPCEngine) RegisterUpcall(app *IApplicator[string, Entry]) {
+
+	args := &RegisterUpcallArgs{ Addr: "localhost:42585" }
+
+	log.Println("calling registerupcall with", args)
+	var reply RegisterUpcallReply
+	err := self.client.Call("API.RegisterUpcall", args, &reply)
+	if err != nil {
+		log.Fatal("API error:", err)
+	}
+	log.Println(reply)
+	//log.Printf("Arith: %d*%d=%d", args.A, args.B, reply)
 }
 
 // SetTrimPrefix sets the trim prefix for garbage collection.
@@ -69,9 +82,46 @@ func (self RPCEngine) SetTrimPrefix(pos LogPos) {
 
 
 
+
+
+var kvs *KVStore
+
+type API int
+
+func (a *API) Apply(args *ApplyArgs[Entry], reply *ApplyReply[string]) error {
+	reply.Result = kvs.Apply(args.Txn, args.E, args.Pos)
+	return nil
+}
+
+
+
+
+
+
+
 func main() {
 	gob.Register(context.Background())
 	gob.Register(KV{})
+
+	var wg sync.WaitGroup
+
+	go func() {
+		defer wg.Done()
+
+		addy, err := net.ResolveTCPAddr("tcp", "0.0.0.0:42585")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		inbound, err := net.ListenTCP("tcp", addy)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		api := new(API)
+		rpc.Register(api)
+		rpc.Accept(inbound)
+	}()
 
 	client, err := rpc.Dial("tcp", "localhost:42586")
 	if err != nil {
@@ -80,7 +130,7 @@ func main() {
 	engine := RPCEngine{
 		client,
 	}
-	log.Println("connected ro rpc")
+	log.Println("connected to rpc")
 
 
 
@@ -107,7 +157,7 @@ func main() {
 
 	//var test2 IEngine[string, Entry] = be
 	var test2 IEngine[string, Entry] = engine
-	kvs := NewKVStore(&test2)
+	kvs = NewKVStore(&test2)
 
 
 	//go func() {
@@ -126,5 +176,7 @@ func main() {
 
 	// taken directly from https://github.com/etcd-io/etcd/blob/main/contrib/raftexample/httpapi.go
 	log.Println("serving http.....")
-	serveHTTPKVAPI(&kvs, *kvport, confChangeC, errorC)
+	serveHTTPKVAPI(kvs, *kvport, confChangeC, errorC)
+
+	wg.Wait()
 }

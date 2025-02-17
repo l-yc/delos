@@ -117,7 +117,7 @@ func (be *BaseEngine) playLog(target LogPos) {
 		// apply
 		txn := (*be.localStore).NewTransaction()
 		entry = entry
-		//(*be.app).Apply(txn, entry, be.cursor) // FIXME add this back after sure it won't deadlock
+		(*be.app).Apply(txn, entry, be.cursor) // FIXME add this back after sure it won't deadlock
 		txn.Commit()
 	}
 }

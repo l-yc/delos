@@ -43,3 +43,23 @@ type KV struct {
 //SetTrimPrefix(pos LogPos)
 
 
+
+
+
+type ApplyArgs[EntryType any] struct {
+	//Context context.Context
+	Txn RWTx
+	E EntryType
+	Pos LogPos
+}
+
+type ApplyReply[ReturnType any] struct {
+	Result ReturnType
+}
+
+type RegisterUpcallArgs struct {
+	Addr string
+}
+
+type RegisterUpcallReply struct {
+}

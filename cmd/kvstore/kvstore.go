@@ -23,14 +23,14 @@ type KVStore struct {
 //	Val string
 //}
 
-func NewKVStore(engine *IEngine[string, Entry]) KVStore {
+func NewKVStore(engine *IEngine[string, Entry]) *KVStore {
 	kvs := KVStore{ data: make(map[string]string), engine: engine }
 	log.Println("created kv store", kvs)
 
 	var test IApplicator[string, Entry] = kvs
 	(*engine).RegisterUpcall(&test)
 	log.Println("registered upcall for engine")
-	return kvs
+	return &kvs
 }
 
 // wrapper
