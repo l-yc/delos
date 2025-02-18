@@ -21,7 +21,6 @@ type RPCEngine struct {
 
 func (self RPCEngine) Propose(e Entry) Future[string] {	
 	// Synchronous call
-	//args := &ProposeArgs[Entry]{ Context: ctx, E: e }
 	args := &ProposeArgs[Entry]{ E: e }
 
 	var reply ProposeReply[string]
@@ -30,7 +29,6 @@ func (self RPCEngine) Propose(e Entry) Future[string] {
 		log.Fatal("API error:", err)
 	}
 	log.Println(reply)
-	//log.Printf("Arith: %d*%d=%d", args.A, args.B, reply)
 
 	return reply.Result
 }
@@ -38,7 +36,6 @@ func (self RPCEngine) Propose(e Entry) Future[string] {
 // Sync synchronizes the state with the shared log tail.
 func (self RPCEngine) Sync() Future[ROTx] {
 
-	//args := &SyncArgs{ Context: ctx }
 	args := &SyncArgs{}
 
 	log.Println("calling sync with", args)
@@ -48,7 +45,6 @@ func (self RPCEngine) Sync() Future[ROTx] {
 		log.Fatal("API error:", err)
 	}
 	log.Println(reply)
-	//log.Printf("Arith: %d*%d=%d", args.A, args.B, reply)
 
 	return reply.Result
 }
@@ -64,19 +60,12 @@ func (self RPCEngine) RegisterUpcall(app *IApplicator[string, Entry]) {
 		log.Fatal("API error:", err)
 	}
 	log.Println(reply)
-	//log.Printf("Arith: %d*%d=%d", args.A, args.B, reply)
 }
 
 // SetTrimPrefix sets the trim prefix for garbage collection.
 func (self RPCEngine) SetTrimPrefix(pos LogPos) {
 }
 
-//type IEngine[ReturnType any, EntryType any] interface {
-//	Propose(ctx context.Context, e EntryType) Future[ReturnType]
-//	Sync(ctx context.Context) Future[ROTx]
-//	RegisterUpcall(app *IApplicator[ReturnType, EntryType])
-//	SetTrimPrefix(pos LogPos)
-//}
 
 
 
@@ -130,22 +119,6 @@ func main() {
 	}
 	log.Println("connected to rpc")
 
-
-
-
-
-
-
-
-
-
-
-
-
-	kvport := flag.Int("port", 1337, "key-value server port")
-	flag.Parse()
-
-
 	//sharedLog := NewSimpleVirtualLog()
 	////localStore := NewFakeLocalStore()
 	//var localStore LocalStore = NewFakeLocalStore()
@@ -153,20 +126,14 @@ func main() {
 	//log.Println("created base engine", be)
 
 
-	//var test2 IEngine[string, Entry] = be
 	var test2 IEngine[string, Entry] = engine
 	kvs = NewKVStore(&test2)
 
 
-	//go func() {
-	//	log.Println("set in kv") 
-	//	kvs.ProposeSet("a", "1")
-	//	log.Println("set in kv done") 
-	//	//kvs.Set("b", "2")
-	//	//log.Println("finish set in kv") 
-	//}()
 
-	//for {}
+	kvport := flag.Int("port", 1337, "key-value server port")
+	flag.Parse()
+
 	confChangeC := make(chan raftpb.ConfChange)
 	defer close(confChangeC)
 	errorC := make(chan error)
