@@ -28,11 +28,6 @@ type SyncReply struct {
 	Result Future[ROTx]
 }
 
-// copied from kvstore -- how to not break this abstraction?
-type KV struct {
-	Key string
-	Val string
-}
 
 
 

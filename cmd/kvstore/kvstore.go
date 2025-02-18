@@ -1,9 +1,9 @@
 package main
 
 import (
-	//"encoding/gob"
+	"bytes"
+	"encoding/gob"
 	"log"
-	//"strings"
 	"sync"
 
 	. "github.com/l-yc/delos/lib"
@@ -17,10 +17,10 @@ type KVStore struct {
 	engine	 *IEngine[string, Entry]
 }
 
-//type KV struct {
-//	Key string
-//	Val string
-//}
+type KV struct {
+	Key string
+	Val string
+}
 
 func NewKVStore(engine *IEngine[string, Entry]) *KVStore {
 	kvs := KVStore{ data: make(map[string]string), engine: engine }
@@ -45,13 +45,13 @@ func (s *KVStore) Get(key string) (string, bool) {
 }
 
 func (s *KVStore) ProposeSet(key string, val string) {
-	//var buf strings.Builder
+	var buf bytes.Buffer
+	encoder := gob.NewEncoder(&buf)
+	if err := encoder.Encode(KV{key, val}); err != nil {
+		log.Fatal(err)
+	}
 
-	//if err := gob.NewEncoder(&buf).Encode(KV{key, val}); err != nil {
-	//	log.Fatal(err)
-	//}
-
-	(*s.engine).Propose(Entry{ Data: KV{key, val} })
+	(*s.engine).Propose(Entry{ Data: buf.Bytes() })
 }
 
 
@@ -66,13 +66,23 @@ func (s *KVStore) Set(k string, v string) {
 
 func (s KVStore) Apply(txn RWTx, e Entry, pos LogPos) string {
 	entry := e
-	data, ok := entry.Data.(KV)
-	if ok {
-		log.Println("successfully applied", data)
-	} else {
-		log.Println("cannot apply", entry)
+	b, ok := entry.Data.([]byte)
+	if !ok {
+		log.Println("got bad data", b)
+		return "bad"
 	}
-	s.Set(data.Key, data.Val)
+	data := bytes.NewReader(b)
+
+	var decodedKV KV
+	decoder := gob.NewDecoder(data)
+	if err := decoder.Decode(&decodedKV); err != nil {
+		log.Println("cannot apply", entry, err)
+		//log.Fatal(err)
+	} else {
+		log.Println("successfully applied", data)
+	}
+
+	s.Set(decodedKV.Key, decodedKV.Val)
 	return "ok"
 }
 
