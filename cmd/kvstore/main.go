@@ -15,6 +15,9 @@ import (
 
 
 
+var tsport string
+var tdport string
+
 type RPCEngine struct {
 	client *rpc.Client
 }
@@ -51,7 +54,7 @@ func (self RPCEngine) Sync() Future[ROTx] {
 
 func (self RPCEngine) RegisterUpcall(app *IApplicator[string, Entry]) {
 
-	args := &RegisterUpcallArgs{ Addr: "localhost:42585" }
+	args := &RegisterUpcallArgs{ Addr: "localhost:" + tsport }
 
 	log.Println("calling registerupcall with", args)
 	var reply RegisterUpcallReply
@@ -91,11 +94,13 @@ func main() {
 	gob.Register(KV{})
 
 	var wg sync.WaitGroup
+	tsport = *flag.String("tcp-serv-port", "42585", "tcp server port")
+	tdport = *flag.String("tcp-dial-port", "42586", "tcp dial port")
 
 	go func() {
 		defer wg.Done()
 
-		addy, err := net.ResolveTCPAddr("tcp", "0.0.0.0:42585")
+		addy, err := net.ResolveTCPAddr("tcp", "0.0.0.0:" + tsport)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -110,7 +115,7 @@ func main() {
 		rpc.Accept(inbound)
 	}()
 
-	client, err := rpc.Dial("tcp", "localhost:42586")
+	client, err := rpc.Dial("tcp", "localhost:" + tdport)
 	if err != nil {
 		log.Fatal("could not connect to rpc error:", err)
 	}
